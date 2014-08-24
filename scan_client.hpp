@@ -81,7 +81,7 @@ namespace internet
 
                 }
 
-                MsgsRequestPointer prepare_start_request();
+                typename scan_client::MsgsRequestPointer prepare_start_request();
 
                 void do_write_request(MsgsRequestPointer msgs_request);
 
@@ -91,6 +91,8 @@ namespace internet
 
                 //Pre-process file detail.
                 void set_file_scan(std::string file_path);
+
+								typename scan_client::MsgsRequestPointer  prepare_scan_request();
 
             private:
                 packedmessage_scan_client<message_scan::RequestScan>  msgs_packed_request_scan;

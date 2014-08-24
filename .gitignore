@@ -2,20 +2,47 @@
 *.slo
 *.lo
 *.o
-*.obj
 
 # Compiled Dynamic libraries
 *.so
 *.dylib
-*.dll
 
 # Compiled Static libraries
 *.lai
 *.la
 *.a
-*.lib
 
-# Executables
-*.exe
-*.out
-*.app
+*.*.swp
+CMakeFiles/
+CMakeFiles/*
+build/
+bulid/*
+src/.deps/*
+src/.deps/
+autom4te.cache/*
+autom4te.cache/
+build-aux/*
+build-aux/
+.deps/*
+.deps/
+.libs/*
+.libs/
+Makefile
+Makefile.in
+aclocal.m4
+config.h
+config.h.in
+config.log
+config.status
+configure
+libtool
+stamp-h1
+!*.cpp
+!*.hpp
+!*.am
+!*.ac
+!*.sh
+!*.Po
+*.cpp~
+*.hpp~
+*.Po
