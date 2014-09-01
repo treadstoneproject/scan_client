@@ -27,9 +27,10 @@
 
 #include <boost/lexical_cast.hpp>
 
-#include "internet/logger/logging.hpp"
+//#include "internet/utils/common.hpp"
+#include "utils/base/common.hpp"
 
-#include "internet/msg/scan_server_client/message_scan.pb.h"
+#include "internet/logger/logging.hpp"
 
 #include "internet/scan_client/packedmessage_scan_client.hpp"
 
@@ -42,41 +43,42 @@ namespace internet
     namespace service
     {
 
-        struct file_detail {
-            uint64_t uuid;
-            enum scan_type { MD5, MD5_HEADER, MD5_BODY, SHA_1, SHA_256, SSDEEP };
-            enum file_type { PE, ELF, PROCESS };
-            std::string timestamp;
-        };
-
-        class scan_client // : public boost::enable_shared_from_this<scan_client>
+        class scan_client
         {
 
             public:
 
-                typedef boost::shared_ptr<message_scan::RequestScan>  MsgsRequestPointer;
-                typedef boost::shared_ptr<message_scan::ResponseScan> MsgsResponsePointer;
+                typedef boost::shared_ptr<message_scan::RequestScan>
+                MsgsRequestPointer;
+                typedef boost::shared_ptr<message_scan::ResponseScan>
+                MsgsResponsePointer;
+
+                //sdir(io_service),// Scan dir : Plan-:00004, Initial service.
 
                 scan_client(std::string ip_addr, std::string port) :
                     msgs_socket(io_service), // Initial socket.
-										sdir(io_service),        // Scan dir
-                    msgs_packed_request_scan(boost::shared_ptr<message_scan::RequestScan>
-                            (new message_scan::RequestScan())),
-                    msgs_packed_response_scan(boost::shared_ptr<message_scan::ResponseScan>
-                            (new message_scan::ResponseScan())) {
+                    msgs_packed_request_scan(
+                            boost::shared_ptr<message_scan::RequestScan>
+                            (new message_scan::RequestScan())
+                    ),
+                    msgs_packed_response_scan(
+                            boost::shared_ptr<message_scan::ResponseScan>
+                            (new message_scan::ResponseScan())
+                    ) {
                     try {
 
-											
-												int port_ = boost::lexical_cast<int>(port);
-											  asio::ip::tcp::endpoint endpoint(asio::ip::address::from_string(ip_addr),port_);
-												/*: Weak ptr  in shared_from_this() */
-                        msgs_socket.async_connect(endpoint, boost::bind(&scan_client::on_connect,this,
-                                asio::placeholders::error));
-										
-											  io_service.run(); 	
+
+                        int port_ = boost::lexical_cast<int>(port);
+                        asio::ip::tcp::endpoint
+                        endpoint(asio::ip::address::from_string(ip_addr),port_);
+                        msgs_socket.async_connect(endpoint,
+                                boost::bind(&scan_client::on_connect,this,
+                                        asio::placeholders::error));
+
+                        io_service.run();
 
                     } catch(boost::system::system_error& error) {
-											 LOG(INFO)<< " Error " << error.code();
+                        LOG(INFO)<< " Error " << error.code();
                     }
 
                 }
@@ -92,17 +94,51 @@ namespace internet
                 //Pre-process file detail.
                 void set_file_scan(std::string file_path);
 
-								typename scan_client::MsgsRequestPointer  prepare_scan_request();
+                typename scan_client::MsgsRequestPointer  prepare_scan_request();
+
+
+                //Set Data to message
+                //UUID:
+                //Timestamp :
+                //Type : SCAN, REGISTER, RESULT
+                //Binary data : e5949a143be892323217b183e13a8789bc328e
+                //Scan type : message_scan::RequestScan::MD5
+                //File type : message_scan::RequestScan::PE
+								void set_uuid(std::string uuid)
+								{
+										this->uuid = uuid;
+								}
+								
+								void set_timestamp(std::string timestamp)
+								{
+										this->timestamp = timestamp;
+								}
+
+								void set_file_scanning(std::vector<utils::file_scan_request*> 
+										 fs_request_vec)
+								{
+									this->fs_request_vec = fs_request_vec;										
+								}
 
             private:
-                packedmessage_scan_client<message_scan::RequestScan>  msgs_packed_request_scan;
+                packedmessage_scan_client<message_scan::RequestScan>
+                msgs_packed_request_scan;
 
-                packedmessage_scan_client<message_scan::ResponseScan> msgs_packed_response_scan;
+                packedmessage_scan_client<message_scan::ResponseScan>
+                msgs_packed_response_scan;
 
-                file_detail f_detail;
+                MsgsRequestPointer scan_reqeust;
+                //scan_dir sdir;
 
-							  scan_dir sdir;
+								std::string uuid;
 
+								std::string timestamp;
+
+							  utils::file_scan_request  * fs_reqeust;
+							  utils::file_scan_response * fs_response;
+
+								std::vector<utils::file_scan_request*>  fs_request_vec;
+						
                 asio::io_service io_service;
                 asio::ip::tcp::socket msgs_socket;
         };
