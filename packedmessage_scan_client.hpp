@@ -32,14 +32,20 @@ namespace internet
 
                 typedef std::vector<uint8_t> data_buffer;
 
-                packedmessage_scan_client(message_pointer  msg = message_pointer()) : msgs(msg) { }
+                packedmessage_scan_client(message_pointer  msg = message_pointer())
+                    : msgs(msg) { }
 
 
                 bool pack(data_buffer& buffer)const;
 
                 void encode_header(data_buffer& buffer, unsigned size)const;
 
+                unsigned decode_header(const data_buffer& buffer)const;
+
+                bool unpack(const data_buffer& buffer);
+
                 message_pointer get_msg();
+
 
             private:
                 message_pointer msgs;

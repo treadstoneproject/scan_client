@@ -29,6 +29,7 @@
 
 //#include "internet/utils/common.hpp"
 #include "utils/base/common.hpp"
+#include "utils/uuid_generator.hpp"
 
 #include "internet/logger/logging.hpp"
 
@@ -55,7 +56,9 @@ namespace internet
 
                 //sdir(io_service),// Scan dir : Plan-:00004, Initial service.
 
-                scan_client(std::string ip_addr, std::string port) :
+                scan_client(std::string ip_addr,
+                        std::string port,
+                        std::vector<utils::file_scan_request *> & fs_request_vec) :
                     msgs_socket(io_service), // Initial socket.
                     msgs_packed_request_scan(
                             boost::shared_ptr<message_scan::RequestScan>
@@ -65,6 +68,8 @@ namespace internet
                             boost::shared_ptr<message_scan::ResponseScan>
                             (new message_scan::ResponseScan())
                     ) {
+
+										set_file_scan(fs_request_vec);
                     try {
 
 
@@ -90,12 +95,32 @@ namespace internet
                 void on_connect(const boost::system::error_code& error);
 
                 void start();
+			
+								//Read from server
+								void start_read_header(const boost::system::error_code & error);
+		
+								void handle_read_header(const boost::system::error_code & error);
 
+							  void start_read_body(unsigned msgs_length);
+
+								void handle_read_body(const boost::system::error_code & error);
+
+				
+								//void prepare_request_scan(MsgsResponsePointer  response_ptr);
+
+							  void on_scan(MsgsResponsePointer response_ptr);
+									
                 //Pre-process file detail.
                 void set_file_scan(std::string file_path);
 
+								typename scan_client::MsgsRequestPointer prepare_start_scan_request();
+
                 typename scan_client::MsgsRequestPointer  prepare_scan_request();
 
+								void on_write(const boost::system::error_code & error);
+
+
+						  void on_read_register(const boost::system::error_code & error);
 
                 //Set Data to message
                 //UUID:
@@ -104,23 +129,23 @@ namespace internet
                 //Binary data : e5949a143be892323217b183e13a8789bc328e
                 //Scan type : message_scan::RequestScan::MD5
                 //File type : message_scan::RequestScan::PE
-								void set_uuid(std::string uuid)
-								{
-										this->uuid = uuid;
-								}
-								
-								void set_timestamp(std::string timestamp)
-								{
-										this->timestamp = timestamp;
-								}
+                void set_uuid(std::string uuid) {
+                    this->uuid = uuid;
+                }
 
-								void set_file_scanning(std::vector<utils::file_scan_request*> 
-										 fs_request_vec)
-								{
-									this->fs_request_vec = fs_request_vec;										
-								}
+                void set_timestamp(std::string timestamp) {
+                    this->timestamp = timestamp;
+                }
+
+                void set_file_scan(std::vector<utils::file_scan_request *>
+                        & fs_request_vec) {
+                    this->fs_request_vec = &fs_request_vec;
+                }
+
 
             private:
+								std::vector<uint8_t>  msgs_read_buffer;
+
                 packedmessage_scan_client<message_scan::RequestScan>
                 msgs_packed_request_scan;
 
@@ -130,15 +155,17 @@ namespace internet
                 MsgsRequestPointer scan_reqeust;
                 //scan_dir sdir;
 
-								std::string uuid;
+                std::string uuid;
 
-								std::string timestamp;
+                std::string timestamp;
 
-							  utils::file_scan_request  * fs_reqeust;
-							  utils::file_scan_response * fs_response;
+                //utils::file_scan_request  * fs_reqeust;
+                //utils::file_scan_response * fs_response;
 
-								std::vector<utils::file_scan_request*>  fs_request_vec;
-						
+                std::vector<utils::file_scan_request *> *fs_request_vec;
+
+                uuid_generator uuid_gen;
+
                 asio::io_service io_service;
                 asio::ip::tcp::socket msgs_socket;
         };
