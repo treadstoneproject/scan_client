@@ -46,6 +46,7 @@ namespace internet
 
                 message_pointer get_msg();
 
+								~packedmessage_scan_client(){ }
 
             private:
                 message_pointer msgs;

@@ -1,3 +1,24 @@
+/*
+* Copyright 2014 Chatsiri Rattana.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+* http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+
+/*  Titles			                                          Authors	         Date
+ * 	- Call to server and scanning                         R.Chatsiri       25/09/2014
+ * 	- Plan-00003 : Connect with RocksDB                   R.Chatsiri       25/09/2014
+ */
+
 
 #include "internet/scan_client/scan_client.hpp"
 namespace internet
@@ -6,24 +27,10 @@ namespace internet
     namespace service
     {
 
-        typename scan_client::MsgsRequestPointer scan_client::
-        prepare_start_scan_request()
-        {
-						LOG(INFO)<<"Client : prepare_start_scan_request";
-
-            MsgsRequestPointer scan_start_request(new message_scan::RequestScan);
-            //UUID per machine.
-            scan_start_request->set_uuid(uuid);
-            //Time from client.
-            scan_start_request->set_timestamp(timestamp);
-            //Scan data
-            scan_start_request->set_type(message_scan::RequestScan::SCAN);
-            return scan_start_request;
-        }
-
         typename scan_client::MsgsRequestPointer scan_client::prepare_scan_request()
         {
-					  LOG(INFO)<<"Client : prepare_scan_request";
+
+            LOG(INFO)<<"-------------------------prepare_scan_request--------------------------";
 
             MsgsRequestPointer scan_request(new message_scan::RequestScan);
             //UUID per machine.
@@ -33,21 +40,22 @@ namespace internet
             //Scan data
             scan_request->set_type(message_scan::RequestScan::SCAN);
 
-            typename std::vector<utils::file_scan_request *>::iterator iter_file;
-
             LOG(INFO)<<"Message type : " << scan_request->type();
             LOG(INFO)<<"Message scanning size : "<< fs_request_vec->size();
+            LOG(INFO)<<"Client UUID : " << scan_request->uuid();
+
+            typename std::vector<utils::file_scan_request *>::iterator iter_file;
 
             for(iter_file = fs_request_vec->begin();
                     iter_file != fs_request_vec->end();
                     ++iter_file) {
 
                 message_scan::RequestScan::RequestSetBinaryValue *request_set_binary =
-                        scan_request->add_request_set_binary_value();
+                        new ::message_scan::RequestScan_RequestSetBinaryValue;
+
                 utils::file_scan_request *request = *iter_file;
 
                 //binary file or MD5, SHA-256, SSDEPP.
-                LOG(INFO)<<"Binary :" << request->binary;
                 request_set_binary->set_binary(request->binary);
 
                 //Scan type MD5, SHA-256, SSDEEP: ex : message_scan::RequestScan::MD5
@@ -56,28 +64,57 @@ namespace internet
                 //Scan file type: exe, elf and process.
                 request_set_binary->set_file_type(request->file_type);
 
-                //File name
                 request_set_binary->set_file_name(request->file_name);
 
                 //File size
                 request_set_binary->set_file_size(request->file_size);
 
-            }
+                *scan_request->add_request_set_binary_value() = *request_set_binary;
+
+                //File name
+                LOG(INFO)<<"File Name : "<< request->file_name;
+                LOG(INFO)<<"Binary    : "<< request->binary;
+                LOG(INFO)<<"Scan type : "<< request->scan_type;
+
+            }// for
+
+            LOG(INFO)<<"--------------------------------------------------------------------";
+
+            return scan_request;
+        }
+
+				//Send close uiid from client to server
+        typename scan_client::MsgsRequestPointer scan_client::prepare_close_request()
+        {
+
+            LOG(INFO)<<"-------------------------prepare_close_request--------------------------";
+
+            MsgsRequestPointer scan_request(new message_scan::RequestScan);
+            //UUID per machine.
+            scan_request->set_uuid(uuid);
+            //Time from client.
+            scan_request->set_timestamp(timestamp);
+            //Scan data
+            scan_request->set_type(message_scan::RequestScan::CLOSE_CONNECTION);
+
+            LOG(INFO)<<"Message type : " << scan_request->type();
+            LOG(INFO)<<"Message scanning size : "<< fs_request_vec->size();
+            LOG(INFO)<<"Client UUID : " << scan_request->uuid();
+
+            LOG(INFO)<<"--------------------------------------------------------------------";
 
             return scan_request;
         }
 
         //Send Request after connection with server.
-        typename scan_client::MsgsRequestPointer  scan_client::prepare_start_request()
+        //[] Request and Sent Message scanning virus to server.
+        //[] All data type group in message and sent to server.
+        typename scan_client::MsgsRequestPointer  scan_client::prepare_regis_request()
         {
 
-            LOG(INFO)<<"client : prepare_start_request";
+            LOG(INFO)<<"client : prepare_regis_request";
 
             MsgsRequestPointer start_request(new message_scan::RequestScan);
-
-            set_uuid(uuid_gen.generate());
-            set_timestamp(std::string("0:0:0:0"));
-
             //create uuid on machine per file.
             start_request->set_uuid(uuid);
             //timestamp  from internal machine.
@@ -88,48 +125,21 @@ namespace internet
             return start_request;
         }
 
-        void scan_client::on_read_register(const boost::system::error_code& error)
-        {
-						LOG(INFO)<<"Client : on_read_register ";
-            if(!error) {
-                start_read_header(error);
-            }
-        }
 
-        void scan_client::on_write(const boost::system::error_code& error)
-        {
-						LOG(INFO)<<"Client : on_write ";
-
-            if(!error) {
-                MsgsRequestPointer  request = prepare_start_request();
-
-                std::vector<uint8_t> write_buffer;
-
-                packedmessage_scan_client<message_scan::RequestScan>
-                request_msgs(request);
-
-                request_msgs.pack(write_buffer);
-
-                msgs_socket.async_write_some(
-                        asio::buffer(write_buffer)
-                        ,boost::bind(&scan_client::on_read_register,
-                                this,
-                                asio::placeholders::error));
-                //Client received data from server.
-            }
-        }
         //Received msgpack from server
         void scan_client::start_read_header(const boost::system::error_code& error)
         {
-            LOG(INFO)<<"Client: start_read_header";
-
-            if(!error) {
-
+            try {
                 msgs_read_buffer.resize(HEADER_SIZE);
                 asio::async_read(msgs_socket, asio::buffer(msgs_read_buffer),
-                        boost::bind(&scan_client::handle_read_header, this,
+                        boost::bind(&scan_client::handle_read_header,
+                                shared_from_this(),
                                 asio::placeholders::error));
 
+                LOG(INFO)<<"Client: start_read_header, Response, send to handle_read_header";
+
+            } catch(boost::system::system_error& e) {
+                LOG(INFO)<<"Client start_read_header, error : "<< e.code();
             }
         }
 
@@ -137,11 +147,13 @@ namespace internet
         {
             LOG(INFO)<<"Client : handle_read_header";
 
-            if(!error) {
+            try {
                 unsigned msgs_length =
                         msgs_packed_request_scan.decode_header(msgs_read_buffer);
                 LOG(INFO)<<"Header message length : " << msgs_length;
                 start_read_body(msgs_length);
+            } catch(boost::system::system_error e) {
+                LOG(INFO)<<"Client handle_read_header, error : "<< e.code();
             }
         }
 
@@ -152,10 +164,14 @@ namespace internet
             asio::mutable_buffers_1 buffer =
                     asio::buffer(&msgs_read_buffer[HEADER_SIZE], msgs_length);
             asio::async_read(msgs_socket, asio::buffer(buffer),
-                    boost::bind(&scan_client::handle_read_body, this,
+                    boost::bind(&scan_client::handle_read_body,
+                            shared_from_this(),
                             asio::placeholders::error));
         }
 
+        //[] Handle scan success.
+        //[] Write result to database (RocksDB).
+        //Plan-00004 : Client should register with uuid before scanning.
         void scan_client::handle_read_body(const boost::system::error_code& error)
         {
             LOG(INFO)<<"Client : handle_read_body";
@@ -167,78 +183,132 @@ namespace internet
                 LOG(INFO)<<"Clinet : Response back is type : " <<
                         response_ptr->type();
 
-                if(response_ptr->type() ==
-                        message_scan::ResponseScan::REGISTER_SUCCESS) {
+                switch(response_ptr->type()) {
+                case  message_scan::ResponseScan::REGISTER_SUCCESS:
                     LOG(INFO)<<"Client : Register success";
                     //Prepare message before send scanning message to server.
-                    //prepare_request_scan(response_ptr);
-                    on_scan(response_ptr);
-                }
+                    do_write_scan_request(response_ptr);
+                    break;
+
+                case message_scan::ResponseScan::REGISTER_UNSUCCESS:
+                    LOG(INFO)<<"Client : Register unusccess";
+                    break;
+
+                case message_scan::ResponseScan::SCAN_SUCCESS :
+                    LOG(INFO)<<"Client : Scan success";
+										do_write_close_request(response_ptr);
+                    break;
+
+                case message_scan::ResponseScan::SCAN_UNSUCCESS :
+                    LOG(INFO)<<"Client : Scan unsuccess";
+                    break;
+
+                default :
+                    //Report before send to system.
+                    LOG(INFO)<<"Client : Unknow message type(incident IP)";
+                    break;
+                }//switch type.
+
+
             }//if
-        }
+        }// handle_read_body
 
-        void scan_client::prepare_request_scan(MsgsResponsePointer  response_ptr)
+
+        void scan_client::do_write_scan_request(MsgsResponsePointer  response_ptr)
         {
-            //Internal condition before scanning.
-            on_scan(response_ptr);
-        }// prepare_request_scan
+            try {
+                LOG(INFO)<<"Client : do_write_scan_request, Response from Server-UUID : "
+                        <<response_ptr->uuid();
 
-        void scan_client::on_scan(MsgsResponsePointer  response_ptr)
+                MsgsRequestPointer  scan_request = prepare_scan_request();
+
+                do_write_request(scan_request);
+                LOG(INFO)<<"Client : do_write_scan_request, write scan request success";
+
+            } catch(boost::system::system_error& error) {
+                LOG(INFO)<<"Client : do_write_scan_request, error : " << error.code();
+            }
+        }//do_write_scan_request
+
+        //[-] Write close scanning session on server.        
+        void scan_client::do_write_close_request(MsgsResponsePointer response_ptr)
         {
-            LOG(INFO)<<"Client : on_scan, start scan";
-						/*
-            MsgsRequestPointer  request = prepare_start_scan_request();
+            try {
+                LOG(INFO)<<"Client : do_write_close_request, Response from Server-UUID : "
+                        <<response_ptr->uuid();
 
-            std::vector<uint8_t> write_buffer;
+			         MsgsRequestPointer  close_request = prepare_close_request();
 
-            packedmessage_scan_client<message_scan::RequestScan>
-            request_msgs(request);
+                do_write_request(close_request);
 
-            request_msgs.pack(write_buffer);
+            } catch(boost::system::system_error& error) {
+                LOG(INFO)<<"Client : do_write_close_request, error : "<< error.code();
+            }
 
-            msgs_socket.async_write_some(
-                    asio::buffer(write_buffer)
-                    ,boost::bind(&scan_client::on_read_register,
-                            this,
-                            asio::placeholders::error));
-					 */
-        }//on scan
+        }//do_write_close_request
+				
 
         void scan_client::do_write_request(MsgsRequestPointer request)
         {
-            LOG(INFO)<<"Clinet : do_write_request, Write request to server ";
+            try {
 
-            std::vector<uint8_t> write_buffer;
+                std::vector<uint8_t> write_buffer;
 
-            packedmessage_scan_client<message_scan::RequestScan>
-            request_msgs(request);
+                packedmessage_scan_client<message_scan::RequestScan>
+                request_msgs(request);
 
-            request_msgs.pack(write_buffer);
+                request_msgs.pack(write_buffer);
 
-            msgs_socket.async_write_some(
-                    asio::buffer(write_buffer)
-                    ,boost::bind(&scan_client::on_write,
-                            this,
-                            asio::placeholders::error));
-        }
+                msgs_socket.async_write_some(
+                        asio::buffer(write_buffer, write_buffer.size())
+                        ,boost::bind(&scan_client::start_read_header,
+                                shared_from_this(),
+                                asio::placeholders::error));
+
+
+                LOG(INFO)<<"Cliend : do_write_request, Write request to server success.";
+
+            } catch(boost::system::system_error& error) {
+                LOG(INFO)<<"Client: do_write_request, error : " << error.code();
+            }
+        }//do_write_request
 
         void scan_client::on_connect(const boost::system::error_code& error)
         {
             LOG(INFO)<<"Client : on_connect, start scan";
 
-            if(!error) {
-                try {
-                    MsgsRequestPointer  request = prepare_start_request();
-                    do_write_request(request);
-                } catch(boost::system::system_error& err) {
-                    LOG(INFO)<<"Client : on_scan, error : "<< err.code();
-                }
-
+            try {
+                MsgsRequestPointer  request = prepare_regis_request();
+                do_write_request(request);
+            } catch(boost::system::system_error& err) {
+                LOG(INFO)<<"Client : on_connection, error : "<< err.code();
             }
 
-        }//on scan
+        }//on_connect
 
-    }
+        void scan_client::start(std::string ip_addr,
+                std::string port,
+                std::vector<utils::file_scan_request *>&
+                fs_request_vec)
+        {
+            try {
+
+                set_file_scan(fs_request_vec);
+
+                int port_ = boost::lexical_cast<int>(port);
+                asio::ip::tcp::endpoint
+                endpoint(asio::ip::address::from_string(ip_addr),port_);
+                msgs_socket.async_connect(endpoint,
+                        boost::bind(&scan_client::on_connect,
+                                shared_from_this(),
+                                asio::placeholders::error));
+
+            } catch(boost::system::system_error& error) {
+                LOG(INFO)<< " Error " << error.code();
+            }
+        }//start
+
+    }//service
 
 
 }

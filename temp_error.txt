@@ -1,0 +1,77 @@
+// Register
+//void handle_read_register(const boost::system::error_code& error);
+
+//void handle_request_detail_register(const boost::system::error_code& error);
+
+//Pack Header and Body in member function.
+//void handle_request_register(MsgsRequestPointer msgs_request);
+
+
+
+/*
+    void scan_connection::handle_read_register(const boost::system::error_code& error)
+    {
+        LOG(INFO)<<"Server : handle_read_register, Start read header, send to start_read_header";
+
+        msgs_read_buffer.resize(HEADER_SIZE);
+        msgs_socket.async_read_some(asio::buffer(msgs_read_buffer),
+                boost::bind(&scan_connection::start_read_header, shared_from_this()));
+
+    }
+*/
+/*
+    void scan_connection::handle_request_detail_register(const boost::system::error_code& error)
+    {
+
+        try {
+
+            //write data back to client.
+            MsgsResponsePointer response_ptr =
+                    prepare_response_register();
+
+            std::vector<uint8_t> write_buffer;
+            packedmessage_scan<message_scan::ResponseScan> resp_msg(response_ptr);
+            resp_msg.pack(write_buffer);
+
+            msgs_socket.async_write_some(
+                    asio::buffer(write_buffer),
+                    boost::bind(&scan_connection::handle_read_register,
+                            shared_from_this(),
+                            asio::placeholders::error));
+
+            LOG(INFO)<<"Server : handle_request_detail_register, write response to client completed 2sd.";
+        } catch(boost::system::system_error& error) {
+            LOG(INFO)<<"server : handle_request_detail_register , error : "<<error.code();
+        }
+
+    }
+*/
+
+/*
+    void scan_connection::handle_request_register(MsgsRequestPointer msgs_request)
+    {
+
+        try {
+
+            //write data back to client.
+            MsgsResponsePointer response_ptr =
+                    prepare_response_register();
+
+            std::vector<uint8_t> write_buffer;
+            packedmessage_scan<message_scan::ResponseScan> resp_msg(response_ptr);
+            resp_msg.pack(write_buffer);
+
+            msgs_socket.async_write_some(
+                    asio::buffer(write_buffer),
+                    boost::bind(&scan_connection::handle_request_detail_register,
+                            shared_from_this(),
+                            asio::placeholders::error));
+
+            LOG(INFO)<<"Server : handle_request_register, write response to client completed 1st.";
+
+        } catch(boost::system::system_error& error) {
+            LOG(INFO)<<"server : handle_request_register , error : "<<error.code();
+        }
+    }
+*/
+
