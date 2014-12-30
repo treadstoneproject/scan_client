@@ -23,6 +23,7 @@
  */
 
 #include <boost/asio.hpp>
+#include <boost/asio/ssl.hpp>
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/make_shared.hpp>
@@ -36,7 +37,8 @@
 
 #include "internet/logger/logging.hpp"
 
-#include "internet/scan_client/packedmessage_scan_client.hpp"
+//#include "internet/scan_client/packedmessage_scan_client.hpp"
+#include "internet/msg/packedmessage_scan_client.hpp"
 
 #include "internet/scan_client/scan_dir.hpp"
 
@@ -69,12 +71,13 @@ namespace internet
                 typedef boost::shared_ptr<scan_client> scan_client_ptr;
 
                 static scan_client_ptr start(asio::io_service& io_service,
+                        asio::ssl::context& context,
                         std::string ip_addr,
                         std::string port,
                         std::vector<utils::file_scan_request *>&
                         fs_request_vec) {
 
-                    scan_client_ptr new_(new scan_client(io_service));
+                    scan_client_ptr new_(new scan_client(io_service, context));
 
                     new_->start(ip_addr, port, fs_request_vec);
 
@@ -82,14 +85,6 @@ namespace internet
 
                 }
 
-                scan_client(asio::io_service& io_service) :
-                    msgs_socket(io_service) { // Initial socket.
-
-                    set_uuid(uuid_gen.generate());
-                    set_timestamp(std::string("0:0:0:0"));
-
-
-                }//scan_client
 
                 void start(std::string ip_addr,
                         std::string port,
@@ -98,17 +93,17 @@ namespace internet
 
                 void start();
 
-								//write register
+                //write register
                 typename scan_client::MsgsRequestPointer prepare_regis_request();
-								//write scan
+                //write scan
                 typename scan_client::MsgsRequestPointer  prepare_scan_request();
-								//write close connection
-								typename scan_client::MsgsRequestPointer prepare_close_request();
+                //write close connection
+                typename scan_client::MsgsRequestPointer prepare_close_request();
 
                 //write request
                 void do_write_request(MsgsRequestPointer msgs_request);
 
-								//write scan 
+                //write scan
                 void do_write_scan_request(MsgsResponsePointer response_ptr);
 
                 //write close connection
@@ -117,6 +112,8 @@ namespace internet
 
                 void on_connect(const boost::system::error_code& error);
 
+                //SSL start handshake
+                void start_ssl_handshake(const boost::system::error_code& error);
 
                 //Read from server
                 void start_read_header(const boost::system::error_code& error);
@@ -153,11 +150,31 @@ namespace internet
                     this->fs_request_vec = &fs_request_vec;
                 }
 
+                bool verify_certificate(bool preverified,
+                        asio::ssl::verify_context& ctx);
+
                 ~scan_client() {
                 }
 
 
             private:
+
+								//Msgs_socket cannot initial object in public of class because non copyable object
+								//declares in type.
+                scan_client(asio::io_service& io_service, asio::ssl::context&   context) :
+                    msgs_socket(io_service, context),
+										resolver_(boost::ref(io_service)) {
+
+										LOG(INFO)<<"Initial first UUID generate";
+
+                    //Initial UUID before send to server.
+                    set_uuid(uuid_gen.generate());
+                    set_timestamp(std::string("0:0:0:0"));
+
+
+                }//scan_client
+
+
                 std::vector<uint8_t>  msgs_read_buffer;
 
                 packedmessage_scan_client<message_scan::RequestScan>
@@ -175,7 +192,16 @@ namespace internet
 
                 utils::uuid_generator uuid_gen;
 
-                asio::ip::tcp::socket msgs_socket;
+                //SSL socket connects to server
+                asio::ssl::stream<asio::ip::tcp::socket>  msgs_socket;
+
+                //asio::ssl::context context_;
+
+								asio::ip::tcp::resolver resolver_;
+
+                asio::io_service  io_service_;
+
+
         };
 
     }

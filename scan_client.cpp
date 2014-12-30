@@ -83,7 +83,7 @@ namespace internet
             return scan_request;
         }
 
-				//Send close uiid from client to server
+        //Send close uiid from client to server
         typename scan_client::MsgsRequestPointer scan_client::prepare_close_request()
         {
 
@@ -188,19 +188,37 @@ namespace internet
                     LOG(INFO)<<"Client : Register success";
                     //Prepare message before send scanning message to server.
                     do_write_scan_request(response_ptr);
+
+                    LOG(INFO)<<"Fall back to Symmetric encryption key";
+                    //Set ssl to null-encryption mode. Write 3DES message to server.
+                    SSL_set_cipher_list(msgs_socket.native_handle(), "eNULL");
+                    SSL_set_options(msgs_socket.native_handle(), SSL_OP_NO_COMPRESSION);
+
                     break;
 
+                    //[-] Handle case unsuccess after register
                 case message_scan::ResponseScan::REGISTER_UNSUCCESS:
                     LOG(INFO)<<"Client : Register unusccess";
                     break;
 
                 case message_scan::ResponseScan::SCAN_SUCCESS :
                     LOG(INFO)<<"Client : Scan success";
-										do_write_close_request(response_ptr);
+                    do_write_close_request(response_ptr);
                     break;
 
+                    //[-] Handle case scan unsuccess
                 case message_scan::ResponseScan::SCAN_UNSUCCESS :
                     LOG(INFO)<<"Client : Scan unsuccess";
+                    break;
+
+                case message_scan::ResponseScan::CLOSE_CONNECTION :
+                    LOG(INFO)<<"Client : Close connection";
+
+                    if(msgs_socket.lowest_layer().is_open()) {
+                        msgs_socket.lowest_layer().close();
+                        LOG(INFO)<<"Client : Close connection completed!";
+                    }
+
                     break;
 
                 default :
@@ -230,14 +248,14 @@ namespace internet
             }
         }//do_write_scan_request
 
-        //[-] Write close scanning session on server.        
+        //[-] Write close scanning session on server.
         void scan_client::do_write_close_request(MsgsResponsePointer response_ptr)
         {
             try {
                 LOG(INFO)<<"Client : do_write_close_request, Response from Server-UUID : "
                         <<response_ptr->uuid();
 
-			         MsgsRequestPointer  close_request = prepare_close_request();
+                MsgsRequestPointer  close_request = prepare_close_request();
 
                 do_write_request(close_request);
 
@@ -246,7 +264,7 @@ namespace internet
             }
 
         }//do_write_close_request
-				
+
 
         void scan_client::do_write_request(MsgsRequestPointer request)
         {
@@ -295,18 +313,57 @@ namespace internet
 
                 set_file_scan(fs_request_vec);
 
-                int port_ = boost::lexical_cast<int>(port);
-                asio::ip::tcp::endpoint
-                endpoint(asio::ip::address::from_string(ip_addr),port_);
-                msgs_socket.async_connect(endpoint,
-                        boost::bind(&scan_client::on_connect,
+                asio::ip::tcp::resolver::query query(ip_addr.c_str(), port.c_str());
+
+                asio::ip::tcp::resolver::iterator iter_endpoint = resolver_.resolve(query);
+
+                LOG(INFO)<<"Start verify cert ";
+
+                /* Verify mode */
+                msgs_socket.set_verify_mode(boost::asio::ssl::verify_peer);
+                msgs_socket.set_verify_callback(boost::bind(&scan_client::verify_certificate,
+                        this,
+                        _1, _2));
+
+                LOG(INFO)<<"Start Async connection";
+
+								
+                boost::asio::async_connect(msgs_socket.lowest_layer(),
+                        iter_endpoint,
+                        boost::bind(&scan_client::start_ssl_handshake,
                                 shared_from_this(),
                                 asio::placeholders::error));
+								
 
             } catch(boost::system::system_error& error) {
                 LOG(INFO)<< " Error " << error.code();
             }
         }//start
+
+        bool scan_client::verify_certificate(bool preverified, asio::ssl::verify_context& ctx)
+        {
+            char subject_name[256];
+            X509 *cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
+            X509_NAME_oneline(X509_get_subject_name(cert), subject_name, 256);
+            LOG(INFO)<<" Verifying cert name : " << std::string(subject_name);
+            return preverified;
+        }//verify_certificate
+
+
+        void scan_client::start_ssl_handshake(const boost::system::error_code& error)
+        {
+            if(!error) {
+
+                LOG(INFO)<<"Start SSL handshake";
+
+                msgs_socket.async_handshake(asio::ssl::stream_base::client,
+                        boost::bind(&scan_client::on_connect,
+                                shared_from_this(),
+                                boost::asio::placeholders::error));
+            }else{
+							LOG(INFO)<<" Error in start_ssl_handshake "<< error.message();
+						}
+        }//start SSL handshake
 
     }//service
 
