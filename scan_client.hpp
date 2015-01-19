@@ -42,6 +42,12 @@
 
 #include "internet/scan_client/scan_dir.hpp"
 
+//#include "internet/security/load_security.hpp"
+
+#include "internet/security/aes_controller.hpp"
+#include "internet/security/encryption_field.hpp"
+
+
 //Set Data to message
 //UUID:
 //Timestamp :
@@ -70,14 +76,37 @@ namespace internet
 
                 typedef boost::shared_ptr<scan_client> scan_client_ptr;
 
+                //Response message encrypted field
+                typedef internet::security::secure_field
+                <message_scan::ResponseScan, internet::security::aes_cbc>
+                secure_field_resp_type;
+
+                typedef internet::security::scan_field
+                <message_scan::ResponseScan, internet::security::aes_cbc>
+                scan_field_resp_type;
+
+                //Request message encrypted field.
+                typedef internet::security::secure_field
+                <message_scan::RequestScan, internet::security::aes_cbc>
+                secure_field_req_type;
+
+                typedef internet::security::scan_field
+                <message_scan::RequestScan, internet::security::aes_cbc>
+                scan_field_req_type;
+
+
+                typedef internet::security::encryption_controller<internet::security::aes_cbc>
+                encryption_type;
+
                 static scan_client_ptr start(asio::io_service& io_service,
                         asio::ssl::context& context,
                         std::string ip_addr,
                         std::string port,
                         std::vector<utils::file_scan_request *>&
-                        fs_request_vec) {
+                        fs_request_vec,
+                        encryption_type * _enc_controller) {
 
-                    scan_client_ptr new_(new scan_client(io_service, context));
+                    scan_client_ptr new_(new scan_client(io_service, context, _enc_controller));
 
                     new_->start(ip_addr, port, fs_request_vec);
 
@@ -98,7 +127,8 @@ namespace internet
                 //write scan
                 typename scan_client::MsgsRequestPointer  prepare_scan_request();
                 //write close connection
-                typename scan_client::MsgsRequestPointer prepare_close_request();
+                typename scan_client::MsgsRequestPointer 
+									prepare_close_request(MsgsResponsePointer response_ptr);
 
                 //write request
                 void do_write_request(MsgsRequestPointer msgs_request);
@@ -156,16 +186,25 @@ namespace internet
                 ~scan_client() {
                 }
 
+                //Default load system in client
+                bool load_system_engine();
 
             private:
 
-								//Msgs_socket cannot initial object in public of class because non copyable object
-								//declares in type.
-                scan_client(asio::io_service& io_service, asio::ssl::context&   context) :
+                //Msgs_socket cannot initial object in public of class because non copyable object
+                //declares in type.
+                scan_client(asio::io_service& io_service, 
+                    asio::ssl::context&   context,
+                    encryption_type * _enc_controller) :
                     msgs_socket(io_service, context),
-										resolver_(boost::ref(io_service)) {
+                    resolver_(boost::ref(io_service)),
+                    secure_field_resp(new  internet::security::scan_field<message_scan::ResponseScan,
+                            internet::security::aes_cbc>()),
+                    secure_field_req(new  internet::security::scan_field<message_scan::RequestScan,
+                            internet::security::aes_cbc>()),
+                    enc_controller_(_enc_controller) {
 
-										LOG(INFO)<<"Initial first UUID generate";
+                    LOG(INFO)<<"Initial first UUID generate";
 
                     //Initial UUID before send to server.
                     set_uuid(uuid_gen.generate());
@@ -197,10 +236,15 @@ namespace internet
 
                 //asio::ssl::context context_;
 
-								asio::ip::tcp::resolver resolver_;
+                asio::ip::tcp::resolver resolver_;
 
                 asio::io_service  io_service_;
 
+                encryption_type *enc_controller_;
+
+                secure_field_resp_type *secure_field_resp;
+
+                secure_field_req_type *secure_field_req;
 
         };
 
