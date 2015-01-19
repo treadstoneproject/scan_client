@@ -14,7 +14,7 @@ scan_dir.hpp \
 basic_scan_dir.hpp \
 basic_scan_dir_service.hpp \
 scan_dir_impl.hpp \
-packedmessage_scan_client.hpp \
+../msg/packedmessage_scan_client.hpp \
 ../msg/scan_server_client/message_scan.pb.h \
 ../logger/logging.hpp \
 ../logger/stringprintf.hpp
@@ -26,7 +26,7 @@ libscan_client_a_SOURCES = $(libscan_client_a_HEADERS) scan_client.cpp \
 basic_scan_dir.cpp \
 basic_scan_dir_service.cpp \
 scan_dir_impl.cpp \
-packedmessage_scan_client.cpp \
+../msg/packedmessage_scan_client.cpp \
 ../msg/scan_server_client/message_scan.pb.cc \
 ../logger/logging.cpp \
 ../logger/stringprintf.cpp

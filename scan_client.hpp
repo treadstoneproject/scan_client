@@ -23,6 +23,7 @@
  */
 
 #include <boost/asio.hpp>
+#include <boost/asio/ssl.hpp>
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/make_shared.hpp>
@@ -36,9 +37,16 @@
 
 #include "internet/logger/logging.hpp"
 
-#include "internet/scan_client/packedmessage_scan_client.hpp"
+//#include "internet/scan_client/packedmessage_scan_client.hpp"
+#include "internet/msg/packedmessage_scan_client.hpp"
 
 #include "internet/scan_client/scan_dir.hpp"
+
+//#include "internet/security/load_security.hpp"
+
+#include "internet/security/aes_controller.hpp"
+#include "internet/security/encryption_field.hpp"
+
 
 //Set Data to message
 //UUID:
@@ -68,13 +76,37 @@ namespace internet
 
                 typedef boost::shared_ptr<scan_client> scan_client_ptr;
 
+                //Response message encrypted field
+                typedef internet::security::secure_field
+                <message_scan::ResponseScan, internet::security::aes_cbc>
+                secure_field_resp_type;
+
+                typedef internet::security::scan_field
+                <message_scan::ResponseScan, internet::security::aes_cbc>
+                scan_field_resp_type;
+
+                //Request message encrypted field.
+                typedef internet::security::secure_field
+                <message_scan::RequestScan, internet::security::aes_cbc>
+                secure_field_req_type;
+
+                typedef internet::security::scan_field
+                <message_scan::RequestScan, internet::security::aes_cbc>
+                scan_field_req_type;
+
+
+                typedef internet::security::encryption_controller<internet::security::aes_cbc>
+                encryption_type;
+
                 static scan_client_ptr start(asio::io_service& io_service,
+                        asio::ssl::context& context,
                         std::string ip_addr,
                         std::string port,
                         std::vector<utils::file_scan_request *>&
-                        fs_request_vec) {
+                        fs_request_vec,
+                        encryption_type * _enc_controller) {
 
-                    scan_client_ptr new_(new scan_client(io_service));
+                    scan_client_ptr new_(new scan_client(io_service, context, _enc_controller));
 
                     new_->start(ip_addr, port, fs_request_vec);
 
@@ -82,14 +114,6 @@ namespace internet
 
                 }
 
-                scan_client(asio::io_service& io_service) :
-                    msgs_socket(io_service) { // Initial socket.
-
-                    set_uuid(uuid_gen.generate());
-                    set_timestamp(std::string("0:0:0:0"));
-
-
-                }//scan_client
 
                 void start(std::string ip_addr,
                         std::string port,
@@ -98,17 +122,18 @@ namespace internet
 
                 void start();
 
-								//write register
+                //write register
                 typename scan_client::MsgsRequestPointer prepare_regis_request();
-								//write scan
+                //write scan
                 typename scan_client::MsgsRequestPointer  prepare_scan_request();
-								//write close connection
-								typename scan_client::MsgsRequestPointer prepare_close_request();
+                //write close connection
+                typename scan_client::MsgsRequestPointer 
+									prepare_close_request(MsgsResponsePointer response_ptr);
 
                 //write request
                 void do_write_request(MsgsRequestPointer msgs_request);
 
-								//write scan 
+                //write scan
                 void do_write_scan_request(MsgsResponsePointer response_ptr);
 
                 //write close connection
@@ -117,6 +142,8 @@ namespace internet
 
                 void on_connect(const boost::system::error_code& error);
 
+                //SSL start handshake
+                void start_ssl_handshake(const boost::system::error_code& error);
 
                 //Read from server
                 void start_read_header(const boost::system::error_code& error);
@@ -153,11 +180,40 @@ namespace internet
                     this->fs_request_vec = &fs_request_vec;
                 }
 
+                bool verify_certificate(bool preverified,
+                        asio::ssl::verify_context& ctx);
+
                 ~scan_client() {
                 }
 
+                //Default load system in client
+                bool load_system_engine();
 
             private:
+
+                //Msgs_socket cannot initial object in public of class because non copyable object
+                //declares in type.
+                scan_client(asio::io_service& io_service, 
+                    asio::ssl::context&   context,
+                    encryption_type * _enc_controller) :
+                    msgs_socket(io_service, context),
+                    resolver_(boost::ref(io_service)),
+                    secure_field_resp(new  internet::security::scan_field<message_scan::ResponseScan,
+                            internet::security::aes_cbc>()),
+                    secure_field_req(new  internet::security::scan_field<message_scan::RequestScan,
+                            internet::security::aes_cbc>()),
+                    enc_controller_(_enc_controller) {
+
+                    LOG(INFO)<<"Initial first UUID generate";
+
+                    //Initial UUID before send to server.
+                    set_uuid(uuid_gen.generate());
+                    set_timestamp(std::string("0:0:0:0"));
+
+
+                }//scan_client
+
+
                 std::vector<uint8_t>  msgs_read_buffer;
 
                 packedmessage_scan_client<message_scan::RequestScan>
@@ -175,7 +231,21 @@ namespace internet
 
                 utils::uuid_generator uuid_gen;
 
-                asio::ip::tcp::socket msgs_socket;
+                //SSL socket connects to server
+                asio::ssl::stream<asio::ip::tcp::socket>  msgs_socket;
+
+                //asio::ssl::context context_;
+
+                asio::ip::tcp::resolver resolver_;
+
+                asio::io_service  io_service_;
+
+                encryption_type *enc_controller_;
+
+                secure_field_resp_type *secure_field_resp;
+
+                secure_field_req_type *secure_field_req;
+
         };
 
     }
